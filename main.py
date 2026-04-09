@@ -1,6 +1,6 @@
 import os
 import time
-import tqdm
+from tqdm import tqdm
 import pandas as pd
 from dotenv import load_dotenv
 from langchain_google_genai import GoogleGenerativeAI
@@ -71,4 +71,17 @@ def classify_dataset(df: pd.DataFrame, batch_size: int = 10, delay: float = 0.5)
             time.sleep(delay)
 
     df['label'] = labels
+
+    out = Path("labled_dataset.csv")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    with open(out, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=["id", "text", "label"])
+        writer.writeheader()
+        writer.writerows(results)
     return df
+
+df = pd.read_csv("Cleaned_Iran_War_Sentiment.csv", nrows=200)
+
+df = classify_dataset(df=df, batch_size=10)
+
+print(df.head())
