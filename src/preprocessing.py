@@ -86,3 +86,5 @@ class Preprocessing:
         blob = TextBlob(text)
         filtered = [word for word, tag in blob.tags if tag.startswith('NN') or tag.startswith('VB')]
         return " ".join([Word(w).lemmatize() for w in filtered])
+    
+    
