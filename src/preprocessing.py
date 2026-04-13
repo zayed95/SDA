@@ -1,11 +1,12 @@
 import time, os, argparse, tqdm, logging, emoji, re
 import pandas as pd
+import nltk
 import pkg_resources
 from symspellpy import SymSpell
 from langdetect import detect, DetectorFactory
 from deep_translator import GoogleTranslator
-
-DetectorFactory.seed = 0
+from textblob import TextBlob, Word
+from nltk.corpus import stopwords
 
 logging.basicConfig(
     level=logging.INFO,
@@ -13,6 +14,12 @@ logging.basicConfig(
     datefmt="%H:%M:%S",
 )
 logger = logging.getLogger(__name__)
+
+
+nltk.download('stopwords', quiet=True)
+STOPWORDS = set(stopwords.words('english'))
+
+DetectorFactory.seed = 0
 
 class Preprocessing:
 
@@ -57,7 +64,7 @@ class Preprocessing:
         
     # Replaces emojis
     def remove_emoji(self, text: str) -> str:
-        return emoji.demojize(text, delimiters=(" :", ": "))
+        return emoji.demojize(text)
     
     def remove_urls(self, text: str) -> str: 
         return re.sub(r'https?://\S+|www\.\S+', '', str(text))
@@ -68,3 +75,14 @@ class Preprocessing:
     
     def remove_punctuation(self, text: str) -> str:
         return re.sub(r'[^\w\s]', '', str(text)).lower() 
+    
+    def tokenize(self, text: str) -> str:
+        return " ".join(TextBlob(text).words)
+    
+    def stop_words_removal(self, text: str) -> str:
+        return " ".join([w for w in text.split() if w not in STOPWORDS])
+    
+    def lemmetize(self, text: str) -> str:
+        blob = TextBlob(text)
+        filtered = [word for word, tag in blob.tags if tag.startswith('NN') or tag.startswith('VB')]
+        return " ".join([Word(w).lemmatize() for w in filtered])
