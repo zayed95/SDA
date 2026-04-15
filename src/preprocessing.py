@@ -1,4 +1,4 @@
-import time, os, argparse, tqdm, logging, emoji, re
+import logging, emoji, re, os, time
 import pandas as pd
 import nltk
 import importlib.resources
@@ -7,6 +7,10 @@ from langdetect import detect, DetectorFactory
 from deep_translator import GoogleTranslator
 from textblob import TextBlob, Word
 from nltk.corpus import stopwords
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_core.prompts import PromptTemplate
+
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 logging.basicConfig(
     level=logging.INFO,
@@ -29,6 +33,24 @@ class Preprocessing:
 
         with importlib.resources.path("symspellpy", "frequency_dictionary_en_82_765.txt") as path:
             self.sym_spell.load_dictionary(str(path), term_index=0, count_index=1)
+
+        self.llm = ChatGoogleGenerativeAI(
+            model="gemini-2.5-flash-lite",
+            google_api_key=GEMINI_API_KEY
+        )
+
+        self.template = " ".join([
+            "Analyze if the following text is an OPINION or a FACT.",
+            "Respond only with one word.",
+            "Text: {text}"
+            ])
+        
+        self.prompt = PromptTemplate(
+            template=self.template,
+            input_variables=["text"]
+            )
+        
+        self.chain = self.prompt | self.llm
     
         self.logger = logging.getLogger(__name__)
 
@@ -44,16 +66,6 @@ class Preprocessing:
             self.logger.info("Unknown language found")
             return 'unknown'
     
-    # A function to translate the tweet or drop the record altogether
-    # def handle_language(self, df: pd.DataFrame) -> pd.DataFrame:
-
-    #     df['language'] = df['text'].apply(self.detect_language)
-    #     df = df[df['language'] != 'unknown'].reset_index(drop=True)
-    #     df['text'].apply(self.translate)
-
-    #     return df.drop(columns=['language'])
-
-    # A function to translate to English if the text was in a different language
     def translate(self, text: str) -> str:
 
         lang = self.detect_language(text)
@@ -91,6 +103,30 @@ class Preprocessing:
         blob = TextBlob(text)
         filtered = [word for word, tag in blob.tags if tag.startswith('NN') or tag.startswith('VB')]
         return " ".join([Word(w).lemmatize() for w in filtered])
+    
+    def add_sentiment(self, text: str) -> str:
+
+        if not isinstance(text, str) or text.strip() == "":
+            return ""
+
+        if not self.args.add_sentiment:
+            return text
+
+        try:
+            stance = self.chain.invoke({
+                "text": str(text)
+            })
+            
+            time.sleep(4.1)
+            return str(stance.content).strip()
+
+        except Exception as e:
+            self.logger.error(f"Error: {e}")
+            if "429" in str(e):
+                time.sleep(60)
+        
+        return None
+
     
     def process_text(self, text: str) -> str:
         
