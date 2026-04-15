@@ -24,25 +24,24 @@ def get_args():
     parser.add_argument("--no_punctuation", action="store_true")
     parser.add_argument("--no_stopwords", action="store_true")
     parser.add_argument("--do_lemma", action="store_true")
+    parser.add_argument("--add_sentiment", action="store_true")
     
     return parser.parse_args()
 
 def run_pipeline(args) -> pd.DataFrame:
         
         pipeline = Preprocessing(args=args)
-        df = pd.read_csv(args.input)
+        df = pd.read_csv(args.input, nrows=10)
         logger.info(f"Starting pipeline on column: {args.column_name}...")
         
         df['processed_text'] = df[args.column_name].apply(pipeline.process_text)
+        df['sentiment'] = df[args.column_name].apply(pipeline.add_sentiment)
         
         df.to_csv(args.output, index=False, encoding='utf-8')
 
         logger.info("Pipeline complete!")
         return df
 
+
 args = get_args()
-
-run_pipeline(args=args)
-
-
-
+_ = run_pipeline(args=args)
