@@ -31,7 +31,7 @@ def get_args():
 def run_pipeline(args) -> pd.DataFrame:
         
         pipeline = Preprocessing(args=args)
-        df = pd.read_csv(args.input, nrows=10)
+        df = pd.read_csv(args.input)
         logger.info(f"Starting pipeline on column: {args.column_name}...")
         
         df['processed_text'] = df[args.column_name].apply(pipeline.process_text)
