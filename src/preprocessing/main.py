@@ -1,6 +1,6 @@
 import argparse, logging
 import pandas as pd
-from preprocessing import Preprocessing
+from src.preprocessing.cleaning import Preprocessing
 
 logging.basicConfig(
     level=logging.INFO,
