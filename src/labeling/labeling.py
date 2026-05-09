@@ -83,7 +83,12 @@ class Model:
                 return self.validate_response(response)
             
             except Exception as e:
-                logger.warning(e)
+                logger.warning(f"Error calling model {self.llm.name}: {e}")
+                if "choices" in str(e):
+                    try:
+                        logger.warning(f"Response content: {response.text}")
+                    except:
+                        pass
 
         
 class LabelingController:
@@ -139,7 +144,7 @@ class LabelingController:
         kappa = (P - Pe) / (1 - Pe)
         return kappa
 
-    def run_pipeline(self, df: pd.DataFrame) -> pd.DataFrame:
+    def run_pipeline(self, df: pd.DataFrame, checkpoint_path: str = None) -> pd.DataFrame:
         """
         Runs the labeling pipeline by sending each text to 3 different LLMs.
         Settles on a final label via majority voting and calculates Fleiss' Kappa.
@@ -147,9 +152,28 @@ class LabelingController:
         all_results = []
         agreement_matrix = []
 
+        start_row = 0
+        if checkpoint_path and os.path.exists(checkpoint_path):
+            try:
+                checkpoint_df = pd.read_csv(checkpoint_path)
+                if not checkpoint_df.empty:
+                    start_row = len(checkpoint_df)
+                    logger.info(f"Checkpoint found. Resuming from row {start_row}")
+                    
+                    model_names = [m.llm.name for m in self.models]
+                    if all(col in checkpoint_df.columns for col in model_names + ['label']):
+                        all_results = checkpoint_df[model_names + ['label']].to_dict('records')
+                        agreement_matrix = checkpoint_df[model_names].values.tolist()
+                    else:
+                        logger.warning("Checkpoint columns mismatch. Restarting.")
+                        start_row = 0
+            except Exception as e:
+                logger.warning(f"Failed to load checkpoint: {e}. Starting from scratch.")
+                start_row = 0
+
         logger.info("Starting multi-model labeling pipeline...")
 
-        for idx in range(0, len(df), 5):
+        for idx in range(start_row, len(df), 5):
             end = min(idx + 5, len(df))
             batch = df.iloc[idx : end]
             
@@ -178,6 +202,12 @@ class LabelingController:
                 
                 model_labels['label'] = final_label
                 all_results.append(model_labels)
+
+            if checkpoint_path:
+                temp_results_df = pd.DataFrame(all_results)
+                progress_df = pd.concat([df.iloc[:len(all_results)].reset_index(drop=True), temp_results_df], axis=1)
+                progress_df.to_csv(checkpoint_path, index=False)
+                logger.info(f"Checkpoint saved to {checkpoint_path}")
 
             logger.info(f"Processed batch {idx//5 + 1}/{(len(df)-1)//5 + 1}")
             time.sleep(10) # Delay to respect rate limits
